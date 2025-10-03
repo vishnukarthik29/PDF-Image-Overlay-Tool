@@ -46,14 +46,6 @@ if pdf_file and image_file:
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        # Add background/overlay option
-        layer_mode = st.radio(
-            "Layer Mode:",
-            ["Overlay (on top)", "Background (behind)"],
-            key="layer_mode",
-            help="Choose whether to place the image on top of or behind the PDF content"
-        )
-        
         page_selection = st.radio(
             "Apply to pages:",
             ["All pages", "First page only", "Last page only", "Custom range"],
@@ -67,43 +59,28 @@ if pdf_file and image_file:
                 key="range"
             )
     
-    # Determine if using background mode
-    is_background = "Background" in layer_mode
-    
     with col2:
-        if not is_background:
-            horizontal_position = st.selectbox(
-                "Horizontal Position:",
-                ["Left", "Center", "Right"],
-                index=2,
-                key="h_pos"
-            )
-            
-            vertical_position = st.selectbox(
-                "Vertical Position:",
-                ["Top", "Middle", "Bottom"],
-                index=2,
-                key="v_pos"
-            )
-        else:
-            st.info("🖼️ Background mode: Image will fill the entire page")
-            horizontal_position = "Center"
-            vertical_position = "Middle"
+        horizontal_position = st.selectbox(
+            "Horizontal Position:",
+            ["Left", "Center", "Right"],
+            index=2,
+            key="h_pos"
+        )
+        
+        vertical_position = st.selectbox(
+            "Vertical Position:",
+            ["Top", "Middle", "Bottom"],
+            index=2,
+            key="v_pos"
+        )
     
     with col3:
-        if not is_background:
-            image_width = st.slider("Image Width (px)", 50, 400, 200, 10, key="width")
-            image_height = st.slider("Image Height (px)", 25, 300, 75, 5, key="height")
-            
-            # Fine-tune position
-            x_offset = st.slider("Horizontal Offset", -200, 200, 0, 5, key="x_off")
-            y_offset = st.slider("Vertical Offset", -200, 200, 0, 5, key="y_off")
-        else:
-            st.info("📏 Size automatically set to full page")
-            image_width = None  # Will be set to page width
-            image_height = None  # Will be set to page height
-            x_offset = 0
-            y_offset = 0
+        image_width = st.slider("Image Width (px)", 50, 400, 200, 10, key="width")
+        image_height = st.slider("Image Height (px)", 25, 300, 75, 5, key="height")
+        
+        # Fine-tune position
+        x_offset = st.slider("Horizontal Offset", -200, 200, 0, 5, key="x_off")
+        y_offset = st.slider("Vertical Offset", -200, 200, 0, 5, key="y_off")
     
     st.markdown("---")
     
@@ -138,38 +115,25 @@ if pdf_file and image_file:
                 # Calculate position based on selection
                 page_width, page_height = letter  # 612 x 792 points
                 
-                # Determine if using background mode
-                is_background = "Background" in layer_mode
+                # Horizontal position
+                if horizontal_position == "Left":
+                    x_pos = 50
+                elif horizontal_position == "Center":
+                    x_pos = (page_width - image_width) / 2
+                else:  # Right
+                    x_pos = page_width - image_width - 50
                 
-                if is_background:
-                    # Full page background
-                    x_pos = 0
-                    y_pos = 0
-                    img_width = page_width
-                    img_height = page_height
-                else:
-                    # Positioned overlay
-                    # Horizontal position
-                    if horizontal_position == "Left":
-                        x_pos = 50
-                    elif horizontal_position == "Center":
-                        x_pos = (page_width - image_width) / 2
-                    else:  # Right
-                        x_pos = page_width - image_width - 50
-                    
-                    # Vertical position
-                    if vertical_position == "Top":
-                        y_pos = page_height - image_height - 50
-                    elif vertical_position == "Middle":
-                        y_pos = (page_height - image_height) / 2
-                    else:  # Bottom
-                        y_pos = 50
-                    
-                    # Apply offsets
-                    x_pos += x_offset
-                    y_pos += y_offset
-                    img_width = image_width
-                    img_height = image_height
+                # Vertical position
+                if vertical_position == "Top":
+                    y_pos = page_height - image_height - 50
+                elif vertical_position == "Middle":
+                    y_pos = (page_height - image_height) / 2
+                else:  # Bottom
+                    y_pos = 50
+                
+                # Apply offsets
+                x_pos += x_offset
+                y_pos += y_offset
                 
                 # Save image temporarily
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp_img:
@@ -185,31 +149,22 @@ if pdf_file and image_file:
                     
                     # Only add image to selected pages
                     if i in pages_to_process:
-                        # Create image layer
+                        # Create overlay
                         packet = BytesIO()
                         can = canvas.Canvas(packet, pagesize=letter)
                         
                         # Draw image with transparency
                         can.drawImage(tmp_img_path, x_pos, y_pos,
-                                    width=img_width, height=img_height,
+                                    width=image_width, height=image_height,
                                     mask='auto')
                         can.save()
                         packet.seek(0)
                         
-                        # Merge based on layer mode
-                        image_layer = PdfReader(packet)
-                        
-                        if is_background:
-                            # Place image behind: merge original page onto image layer
-                            image_page = image_layer.pages[0]
-                            image_page.merge_page(page)
-                            writer.add_page(image_page)
-                        else:
-                            # Place image on top: merge image layer onto original page
-                            page.merge_page(image_layer.pages[0])
-                            writer.add_page(page)
-                    else:
-                        writer.add_page(page)
+                        # Merge overlay with page
+                        overlay = PdfReader(packet)
+                        page.merge_page(overlay.pages[0])
+                    
+                    writer.add_page(page)
                 
                 # Create output PDF
                 output = BytesIO()
@@ -243,6 +198,5 @@ st.markdown("---")
 st.markdown("""
 <div style='text-align: center; color: gray; font-size: 12px;'>
     <p>💡 Tip: Use PNG images with transparent backgrounds for best results</p>
-    <p>🎨 Background mode places the image behind text, Overlay mode places it on top</p>
 </div>
 """, unsafe_allow_html=True)
