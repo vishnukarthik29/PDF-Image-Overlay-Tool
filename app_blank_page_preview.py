@@ -118,67 +118,32 @@ with tab1:
         st.subheader("👁️ Position Preview")
         
         # Create preview canvas
-        preview_width = 600
+        preview_width = 400
         preview_height = int(preview_width * (792/612))  # Maintain letter aspect ratio
         
-        # Try to render the first page of the PDF as preview background
+        # Create a white canvas representing the PDF page
+        preview_canvas = Image.new('RGB', (preview_width, preview_height), 'white')
+        draw = ImageDraw.Draw(preview_canvas)
+        
+        # Draw border
+        draw.rectangle([0, 0, preview_width-1, preview_height-1], outline='gray', width=2)
+        
+        # Draw grid lines for reference
+        for i in range(1, 4):
+            y = preview_height * i // 4
+            draw.line([(0, y), (preview_width, y)], fill='lightgray', width=1)
+            x = preview_width * i // 4
+            draw.line([(x, 0), (x, preview_height)], fill='lightgray', width=1)
+        
+        # Add text labels
         try:
-            from pdf2image import convert_from_bytes
-            import fitz  # PyMuPDF
-            
-            pdf_file.seek(0)
-            pdf_bytes = pdf_file.read()
-            
-            # Try using PyMuPDF first (faster and more reliable)
-            try:
-                pdf_document = fitz.open(stream=pdf_bytes, filetype="pdf")
-                first_page = pdf_document[0]
-                
-                # Render page to pixmap
-                zoom = preview_width / first_page.rect.width
-                mat = fitz.Matrix(zoom, zoom)
-                pix = first_page.get_pixmap(matrix=mat)
-                
-                # Convert to PIL Image
-                preview_canvas = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-                
-                # Update preview height to match actual rendered page
-                preview_height = pix.height
-                
-                pdf_document.close()
-                
-            except ImportError:
-                # Fallback to pdf2image if PyMuPDF not available
-                images = convert_from_bytes(pdf_bytes, first_page=1, last_page=1, dpi=150)
-                preview_canvas = images[0]
-                
-                # Resize to preview width
-                aspect_ratio = preview_canvas.height / preview_canvas.width
-                preview_height = int(preview_width * aspect_ratio)
-                preview_canvas = preview_canvas.resize((preview_width, preview_height), Image.Resampling.LANCZOS)
-            
-        except Exception as e:
-            # If PDF rendering fails, create a simple canvas
-            st.warning(f"⚠️ Could not render PDF preview. Install PyMuPDF (`pip install PyMuPDF`) for better preview. Showing placeholder instead.")
-            
-            preview_canvas = Image.new('RGB', (preview_width, preview_height), 'white')
-            draw = ImageDraw.Draw(preview_canvas)
-            
-            # Draw border
-            draw.rectangle([0, 0, preview_width-1, preview_height-1], outline='gray', width=2)
-            
-            # Draw grid lines for reference
-            for i in range(1, 4):
-                y = preview_height * i // 4
-                draw.line([(0, y), (preview_width, y)], fill='lightgray', width=1)
-                x = preview_width * i // 4
-                draw.line([(x, 0), (x, preview_height)], fill='lightgray', width=1)
-            
-            # Add text labels
-            try:
-                draw.text((preview_width//2 - 50, preview_height//2), "PDF First Page", fill='gray')
-            except:
-                pass
+            # Draw corner labels (smaller size)
+            draw.text((10, 10), "Top-Left", fill='lightgray')
+            draw.text((preview_width-80, 10), "Top-Right", fill='lightgray')
+            draw.text((10, preview_height-25), "Bottom-Left", fill='lightgray')
+            draw.text((preview_width-100, preview_height-25), "Bottom-Right", fill='lightgray')
+        except:
+            pass  # Skip if font issues
         
         # Calculate scaled position for preview
         scale_factor = preview_width / 612  # Scale from letter size to preview size

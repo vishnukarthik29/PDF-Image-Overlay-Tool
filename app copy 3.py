@@ -4,7 +4,7 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter, A4
 from reportlab.lib.utils import ImageReader
 from io import BytesIO
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 import tempfile
 import os
 
@@ -114,149 +114,6 @@ with tab1:
         
         st.markdown("---")
         
-        # PREVIEW SECTION
-        st.subheader("👁️ Position Preview")
-        
-        # Create preview canvas
-        preview_width = 600
-        preview_height = int(preview_width * (792/612))  # Maintain letter aspect ratio
-        
-        # Try to render the first page of the PDF as preview background
-        try:
-            from pdf2image import convert_from_bytes
-            import fitz  # PyMuPDF
-            
-            pdf_file.seek(0)
-            pdf_bytes = pdf_file.read()
-            
-            # Try using PyMuPDF first (faster and more reliable)
-            try:
-                pdf_document = fitz.open(stream=pdf_bytes, filetype="pdf")
-                first_page = pdf_document[0]
-                
-                # Render page to pixmap
-                zoom = preview_width / first_page.rect.width
-                mat = fitz.Matrix(zoom, zoom)
-                pix = first_page.get_pixmap(matrix=mat)
-                
-                # Convert to PIL Image
-                preview_canvas = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-                
-                # Update preview height to match actual rendered page
-                preview_height = pix.height
-                
-                pdf_document.close()
-                
-            except ImportError:
-                # Fallback to pdf2image if PyMuPDF not available
-                images = convert_from_bytes(pdf_bytes, first_page=1, last_page=1, dpi=150)
-                preview_canvas = images[0]
-                
-                # Resize to preview width
-                aspect_ratio = preview_canvas.height / preview_canvas.width
-                preview_height = int(preview_width * aspect_ratio)
-                preview_canvas = preview_canvas.resize((preview_width, preview_height), Image.Resampling.LANCZOS)
-            
-        except Exception as e:
-            # If PDF rendering fails, create a simple canvas
-            st.warning(f"⚠️ Could not render PDF preview. Install PyMuPDF (`pip install PyMuPDF`) for better preview. Showing placeholder instead.")
-            
-            preview_canvas = Image.new('RGB', (preview_width, preview_height), 'white')
-            draw = ImageDraw.Draw(preview_canvas)
-            
-            # Draw border
-            draw.rectangle([0, 0, preview_width-1, preview_height-1], outline='gray', width=2)
-            
-            # Draw grid lines for reference
-            for i in range(1, 4):
-                y = preview_height * i // 4
-                draw.line([(0, y), (preview_width, y)], fill='lightgray', width=1)
-                x = preview_width * i // 4
-                draw.line([(x, 0), (x, preview_height)], fill='lightgray', width=1)
-            
-            # Add text labels
-            try:
-                draw.text((preview_width//2 - 50, preview_height//2), "PDF First Page", fill='gray')
-            except:
-                pass
-        
-        # Calculate scaled position for preview
-        scale_factor = preview_width / 612  # Scale from letter size to preview size
-        
-        if is_background:
-            # Full page background preview
-            preview_x = 0
-            preview_y = 0
-            preview_img_width = preview_width
-            preview_img_height = preview_height
-            
-            # Resize and place the image
-            img_resized = img.resize((preview_img_width, preview_img_height), Image.Resampling.LANCZOS)
-            
-            # Blend with canvas to show it's behind
-            preview_canvas = Image.blend(preview_canvas, img_resized, alpha=0.3)
-            
-        else:
-            # Calculate actual position on PDF
-            page_width, page_height = letter
-            
-            if horizontal_position == "Left":
-                x_pos = 50
-            elif horizontal_position == "Center":
-                x_pos = (page_width - image_width) / 2
-            else:  # Right
-                x_pos = page_width - image_width - 50
-            
-            if vertical_position == "Top":
-                y_pos = page_height - image_height - 50
-            elif vertical_position == "Middle":
-                y_pos = (page_height - image_height) / 2
-            else:  # Bottom
-                y_pos = 50
-            
-            # Apply offsets
-            x_pos += x_offset
-            y_pos += y_offset
-            
-            # Scale to preview coordinates
-            preview_x = int(x_pos * scale_factor)
-            preview_y = int((page_height - y_pos - image_height) * scale_factor)  # Flip Y axis
-            preview_img_width = int(image_width * scale_factor)
-            preview_img_height = int(image_height * scale_factor)
-            
-            # Resize the uploaded image to preview size
-            img_resized = img.resize((preview_img_width, preview_img_height), Image.Resampling.LANCZOS)
-            
-            # Paste the image onto preview canvas
-            if img.mode == 'RGBA':
-                preview_canvas.paste(img_resized, (preview_x, preview_y), img_resized)
-            else:
-                preview_canvas.paste(img_resized, (preview_x, preview_y))
-            
-            # Draw a red border around the image position
-            draw = ImageDraw.Draw(preview_canvas)
-            draw.rectangle(
-                [preview_x, preview_y, preview_x + preview_img_width, preview_y + preview_img_height],
-                outline='red',
-                width=2
-            )
-        
-        # Display preview
-        col_prev1, col_prev2 = st.columns([2, 1])
-        with col_prev1:
-            st.image(preview_canvas, caption="Position Preview (not to scale)", use_container_width=True)
-        
-        with col_prev2:
-            st.info(f"""
-            **Preview Info:**
-            - Mode: {layer_mode}
-            - Position: {horizontal_position} / {vertical_position}
-            - Size: {image_width if image_width else 'Full Page'} × {image_height if image_height else 'Full Page'} px
-            - Offset: ({x_offset}, {y_offset})
-            """)
-        
-        st.markdown("---")
-        
         # Generate button
         if st.button("🎨 Generate PDF", type="primary", use_container_width=True, key="generate_overlay"):
             with st.spinner("Processing PDF..."):
@@ -320,10 +177,6 @@ with tab1:
                         y_pos += y_offset
                         img_width = image_width
                         img_height = image_height
-                    
-                    # Reload image for processing
-                    image_file.seek(0)
-                    img = Image.open(image_file)
                     
                     # Save image temporarily
                     with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp_img:
@@ -777,7 +630,6 @@ st.markdown("""
 <div style='text-align: center; color: gray; font-size: 12px;'>
     <p>💡 Overlay Tool: Use PNG images with transparent backgrounds for best results</p>
     <p>🎨 Background mode places the image behind text, Overlay mode places it on top</p>
-    <p>👁️ Preview shows approximate position - adjust settings and preview updates automatically</p>
     <p>📄 Image Converter: Supports multiple images and A4 format (210 × 297 mm)</p>
     <p>🔗 PDF Merger: Combine multiple PDFs with optional bookmarks for easy navigation</p>
 </div>
