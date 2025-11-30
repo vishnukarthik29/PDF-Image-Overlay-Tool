@@ -1,10 +1,11 @@
-# 📄 PDF Tools Suite
+# 📄 PDF Overlay Tools Suite
 
 A comprehensive Streamlit application that provides three powerful PDF tools in one interface: image overlay/watermarking, image-to-PDF conversion, and PDF merging capabilities.
 
 ## ✨ Features
 
 ### 🎨 Tab 1: PDF Image Overlay
+
 Add signatures, stamps, watermarks, or any image to your PDF documents with precise control.
 
 - **Dual Layer Modes**:
@@ -18,6 +19,7 @@ Add signatures, stamps, watermarks, or any image to your PDF documents with prec
 - **Transparency Support**: Seamless PNG transparency handling
 
 ### 🖼️ Tab 2: Image to PDF Converter
+
 Convert single or multiple images into professional A4-sized PDF documents.
 
 - **Batch Processing**: Convert multiple images at once
@@ -33,6 +35,7 @@ Convert single or multiple images into professional A4-sized PDF documents.
 - **Format Support**: PNG, JPG, JPEG, BMP, GIF
 
 ### 🔗 Tab 3: PDF Merger
+
 Combine multiple PDF files into a single organized document.
 
 - **Batch Merging**: Merge unlimited PDF files
@@ -53,12 +56,14 @@ Combine multiple PDF files into a single organized document.
 ### Installation
 
 1. Clone this repository:
+
 ```bash
 git clone https://github.com/vishnukarthik29/PDF-Image-Overlay-Tool.git
 cd PDF-Image-Overlay-Tool
 ```
 
 2. Install required dependencies:
+
 ```bash
 pip install -r requirements.txt
 ```
@@ -66,6 +71,7 @@ pip install -r requirements.txt
 ### Required Dependencies
 
 Create a `requirements.txt` file with:
+
 ```
 streamlit>=1.28.0
 PyPDF2>=3.0.0
@@ -77,6 +83,7 @@ pandas>=2.0.0
 ### Running the Application
 
 1. Start the Streamlit server:
+
 ```bash
 streamlit run app.py
 ```
@@ -88,6 +95,7 @@ streamlit run app.py
 ### Tab 1: PDF Image Overlay
 
 **Basic Workflow**:
+
 1. Upload your PDF and image files
 2. Choose layer mode (Overlay or Background)
 3. Select which pages to modify
@@ -95,6 +103,7 @@ streamlit run app.py
 5. Click "Generate PDF" and download
 
 **Use Cases**:
+
 - Adding signatures to contracts
 - Applying approval stamps
 - Creating watermarked documents
@@ -104,6 +113,7 @@ streamlit run app.py
 ### Tab 2: Image to PDF Converter
 
 **Basic Workflow**:
+
 1. Upload one or more images
 2. Select fit mode and orientation
 3. Adjust margins if needed
@@ -111,6 +121,7 @@ streamlit run app.py
 5. Click "Convert to PDF" and download
 
 **Use Cases**:
+
 - Scanning document replacement
 - Photo portfolios
 - Receipt archiving
@@ -120,6 +131,7 @@ streamlit run app.py
 ### Tab 3: PDF Merger
 
 **Basic Workflow**:
+
 1. Upload multiple PDF files
 2. Review the file list and total pages
 3. Choose merge order
@@ -127,6 +139,7 @@ streamlit run app.py
 5. Click "Merge PDFs" and download
 
 **Use Cases**:
+
 - Combining multi-part documents
 - Creating complete reports from sections
 - Assembling invoice packages
@@ -136,12 +149,14 @@ streamlit run app.py
 ## 💡 Tips & Best Practices
 
 ### For Image Overlay
+
 - Use PNG images with transparency for professional overlays
 - Test offset values to perfect signature positioning
 - Background mode works great for semi-transparent watermarks
 - Use page ranges like "1,3,5" or "1-3" for selective application
 
 ### For Image Conversion
+
 - Higher resolution images produce better PDFs
 - "Fit to page" maintains quality without distortion
 - Use margins for better visual presentation
@@ -149,6 +164,7 @@ streamlit run app.py
 - Batch convert to save time with multiple images
 
 ### For PDF Merging
+
 - Add bookmarks for documents you'll navigate frequently
 - Sort by filename for automatically organizing files
 - Review the page count preview before merging
@@ -177,25 +193,31 @@ pdf-tools-suite/
 ### Common Issues
 
 **ModuleNotFoundError**
+
 - Solution: Install dependencies with `pip install -r requirements.txt`
 
 **Image not appearing in PDF**
+
 - Check file integrity and try PNG format
 - Verify correct layer mode selection
 
 **Invalid page range error**
+
 - Use format: "1,3,5" or "1-3"
 - Ensure page numbers are within document range
 
 **Image quality degradation**
+
 - Upload higher resolution source images
 - Adjust size settings appropriately
 
 **PDF merge fails**
+
 - Ensure all uploaded files are valid PDFs
 - Check that PDFs aren't password-protected
 
 **Conversion produces blank pages**
+
 - Verify images aren't corrupted
 - Try different fit mode settings
 
@@ -220,6 +242,7 @@ For issues or questions, please open an issue on GitHub.
 ## 🔄 Version History
 
 - **v2.0.0** (2025): Multi-tool suite update
+
   - Added Image to PDF Converter
   - Added PDF Merger tool
   - Implemented tabbed interface
@@ -227,6 +250,7 @@ For issues or questions, please open an issue on GitHub.
   - Added batch processing capabilities
 
 - **v1.1.0** (2025): Background mode update
+
   - Added background/overlay layer selection
   - Full-page background support
   - Dynamic UI improvements
@@ -238,21 +262,25 @@ For issues or questions, please open an issue on GitHub.
 ## 🎯 Future Enhancements
 
 ### Overlay Tool
+
 - [ ] Multiple image overlays per PDF
 - [ ] Rotation and opacity controls
 - [ ] Template saving/loading
 
 ### Converter Tool
+
 - [ ] SVG and WebP support
 - [ ] Quality presets (web, print, archive)
 - [ ] Custom page sizes
 
 ### Merger Tool
+
 - [ ] Page range selection from each PDF
 - [ ] Drag-and-drop reordering
 - [ ] PDF preview before merging
 
 ### General
+
 - [ ] Batch processing across tools
 - [ ] Password-protected PDF support
 - [ ] Cloud storage integration
