@@ -308,4 +308,4 @@ Built with modern Python libraries and Streamlit's powerful framework. Special t
 
 ---
 
-**Made with ❤️ using Streamlit** | Your complete PDF toolkit in one application
+**Made with ❤️ using Streamlit** | Your complete PDF toolkit in one application.
