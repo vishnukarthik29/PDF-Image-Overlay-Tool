@@ -304,7 +304,7 @@ For issues or questions, please open an issue on GitHub.
 
 ## 🌟 Acknowledgments
 
-Built with modern Python libraries and Streamlit powerful framework. Special thanks to the open-source community for the excellent tools that make this possible.
+Built with modern Python libraries and Streamlit's powerful framework. Special thanks to the open-source community for the excellent tools that make this possible.
 
 ---
 
