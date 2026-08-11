@@ -1,9 +1,12 @@
 """
 Split PDF Tab
 --------------
-Drop-in tab for the PDF-Image-Overlay-Tool Streamlit app.
+Drop-in tab module for the PDF-Image-Overlay-Tool Streamlit app.
 
-Usage in app.py:
+Save this file as tabs/split_pdf_tab.py (same folder as your other tab
+modules like pdf_merger.py), then in app.py:
+
+    from tabs import split_pdf_tab
 
     tab1, tab2, tab3, tab4 = st.tabs([
         "PDF Image Overlay",
@@ -13,10 +16,7 @@ Usage in app.py:
     ])
 
     with tab4:
-        render_split_pdf_tab()
-
-Just paste the function below into app.py (or import it from this file)
-and add "Split PDF" as a 4th tab.
+        split_pdf_tab.render()
 """
 
 import io
@@ -26,7 +26,7 @@ import streamlit as st
 from PyPDF2 import PdfReader, PdfWriter
 
 
-def render_split_pdf_tab():
+def render():
     st.header("✂️ Split PDF")
     st.write("Split a PDF into smaller files, grouped by a fixed number of pages, and download them all as a ZIP.")
 
