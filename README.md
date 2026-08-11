@@ -1,10 +1,10 @@
-# 📄 PDF Overlay Tools Suite
+# 📄 PDF Tools Suite
 
-A comprehensive Streamlit application that provides three powerful PDF tools in one interface: image overlay/watermarking, image-to-PDF conversion, and PDF merging capabilities.
+A comprehensive Streamlit application that provides five powerful PDF tools in one interface: image overlay/watermarking, image-to-PDF conversion, PDF merging, PDF splitting, and PDF compression.
 
 ## ✨ Features
 
-### 🎨 Tab 1: PDF Image Overlay
+### 📝 Tab 1: PDF Image Overlay
 
 Add signatures, stamps, watermarks, or any image to your PDF documents with precise control.
 
@@ -15,7 +15,7 @@ Add signatures, stamps, watermarks, or any image to your PDF documents with prec
 - **Precise Positioning** (Overlay Mode):
   - 9 preset positions with fine-tune offset controls
   - Adjustable width and height
-- **Full-Page Background** (Background Mode): Automatic scaling for watermarks
+- **Full-Page Background** (Background Mode): Automatic scaling for watermarks, matched to each page's own size
 - **Transparency Support**: Seamless PNG transparency handling
 
 ### 🖼️ Tab 2: Image to PDF Converter
@@ -46,6 +46,27 @@ Combine multiple PDF files into a single organized document.
 - **Document Overview**: Preview page counts before merging
 - **Large File Support**: Handle PDFs of any size
 
+### ✂️ Tab 4: Split PDF
+
+Break a single PDF into multiple smaller files and download them all at once.
+
+- **Split Modes**:
+  - Every N pages (fixed-size chunks)
+  - Custom page ranges (e.g. `1-2`, `3-4`, `5`)
+  - Every page as its own file
+- **ZIP Download**: All resulting files are packaged into a single ZIP
+- **Live Preview**: See how many files will be created and their labels before splitting
+
+### 🗜️ Tab 5: Compress PDF
+
+Shrink PDF file size by recompressing embedded images — ideal for scanned documents or PDFs with high-resolution photos.
+
+- **Compression Presets**: Low compression (best quality), Recommended, and High compression (smallest size)
+- **Advanced Controls**: Manually tune JPEG quality and max image dimension
+- **Smart Downsampling**: Automatically resizes oversized images and skips tiny icons/bullets
+- **Before/After Stats**: Original size, compressed size, and percentage saved
+- **Safe Fallback**: Warns if a PDF has little recompressible image data instead of producing a larger file
+
 ## 🚀 Getting Started
 
 ### Prerequisites
@@ -68,16 +89,17 @@ cd PDF-Image-Overlay-Tool
 pip install -r requirements.txt
 ```
 
-### Required Dependencies
+### Dependencies
 
-Create a `requirements.txt` file with:
+The app relies on the following packages (see [requirements.txt](requirements.txt)):
 
 ```
 streamlit>=1.28.0
 PyPDF2>=3.0.0
 reportlab>=4.0.0
 Pillow>=10.0.0
-pandas>=2.0.0
+PyMuPDF
+pikepdf>=8.0.0
 ```
 
 ### Running the Application
@@ -146,6 +168,36 @@ streamlit run app.py
 - Merging scanned documents
 - Creating comprehensive portfolios
 
+### Tab 4: Split PDF
+
+**Basic Workflow**:
+
+1. Upload the PDF you want to split
+2. Choose a split mode (every N pages, custom ranges, or one file per page)
+3. Review the generated file list and labels
+4. Click "Split & Prepare ZIP" and download
+
+**Use Cases**:
+
+- Extracting a chapter or section from a large document
+- Separating a scanned batch into individual files
+- Sharing only relevant pages instead of a whole document
+
+### Tab 5: Compress PDF
+
+**Basic Workflow**:
+
+1. Upload the PDF you want to shrink
+2. Pick a compression preset (or fine-tune quality/dimension in Advanced settings)
+3. Click "Compress PDF"
+4. Review the size comparison and download the result
+
+**Use Cases**:
+
+- Reducing scanned document file size before emailing
+- Preparing large photo-heavy PDFs for web upload
+- Meeting file size limits for submission portals
+
 ## 💡 Tips & Best Practices
 
 ### For Image Overlay
@@ -170,22 +222,41 @@ streamlit run app.py
 - Review the page count preview before merging
 - Use descriptive filenames for better bookmark labels
 
+### For PDF Splitting
+
+- Use "Custom page ranges" when you need specific, non-uniform sections
+- "Every page" is useful when you need one file per scanned page
+- Check the preview list of output filenames before generating the ZIP
+
+### For PDF Compression
+
+- Start with "Recommended" and only switch to "High compression" if file size is still too large
+- Lower the max image dimension for documents that will only be viewed on screen
+- If a PDF barely shrinks, it likely contains mostly text/vector content rather than images
+
 ## 🛠️ Technology Stack
 
 - **Streamlit**: Modern web application framework
-- **PyPDF2**: PDF manipulation and merging
+- **PyPDF2**: PDF manipulation, merging, and splitting
 - **ReportLab**: PDF generation and overlay creation
+- **PyMuPDF (fitz)**: PDF page size detection for overlays
+- **pikepdf**: PDF image recompression and optimization
 - **Pillow (PIL)**: Image processing and conversion
-- **Pandas**: Data display and organization
 
 ## 📁 Project Structure
 
 ```
-pdf-tools-suite/
+PDF-Image-Overlay-Tool/
 │
-├── app.py              # Main Streamlit application
-├── requirements.txt    # Python dependencies
-└── README.md          # Project documentation
+├── app.py                     # Main Streamlit application (tab wiring)
+├── requirements.txt           # Python dependencies
+├── tabs/
+│   ├── pdf_overlay.py         # Tab 1: PDF Image Overlay
+│   ├── image_to_pdf.py        # Tab 2: Image to PDF Converter
+│   ├── pdf_merger.py          # Tab 3: PDF Merger
+│   ├── split_pdf_tab.py       # Tab 4: Split PDF
+│   └── compress_pdf_tab.py    # Tab 5: Compress PDF
+└── README.md                  # Project documentation
 ```
 
 ## ⚠️ Troubleshooting
@@ -221,6 +292,18 @@ pdf-tools-suite/
 - Verify images aren't corrupted
 - Try different fit mode settings
 
+**Split PDF produces an invalid range error**
+
+- Ranges must be 1-indexed and within the document's page count (e.g. "1-3" on a 5-page PDF)
+
+**Compress PDF says pikepdf is missing**
+
+- Install it with `pip install pikepdf` or reinstall via `requirements.txt`
+
+**Compressed file isn't smaller**
+
+- The PDF likely has little recompressible image data (mostly text or vector graphics) — compression mainly targets embedded raster images
+
 ## 🤝 Contributing
 
 Contributions are welcome! Please follow these steps:
@@ -240,6 +323,13 @@ This project is open source and available under the MIT License.
 For issues or questions, please open an issue on GitHub.
 
 ## 🔄 Version History
+
+- **v3.0.0** (2026): Split & Compress update
+
+  - Added Split PDF tool (fixed-size, custom ranges, or per-page)
+  - Added Compress PDF tool (image recompression with quality presets)
+  - Overlay tool now determines page size automatically per PDF
+  - Expanded to a five-tab interface
 
 - **v2.0.0** (2025): Multi-tool suite update
 
@@ -279,6 +369,16 @@ For issues or questions, please open an issue on GitHub.
 - [ ] Drag-and-drop reordering
 - [ ] PDF preview before merging
 
+### Split Tool
+
+- [ ] PDF preview before splitting
+- [ ] Split by bookmark/section
+
+### Compress Tool
+
+- [ ] Text/font stream optimization
+- [ ] Batch compression across multiple PDFs
+
 ### General
 
 - [ ] Batch processing across tools
@@ -299,6 +399,8 @@ For issues or questions, please open an issue on GitHub.
 - **Overlay Tool**: Processes ~1 second per page
 - **Converter Tool**: ~2 seconds per image
 - **Merger Tool**: ~0.5 seconds per PDF
+- **Split Tool**: ~0.5 seconds per output file
+- **Compress Tool**: Depends on image count/size — large, image-heavy PDFs take longer
 - **File Size Limits**: Dependent on available RAM
 - **Recommended**: Keep individual PDFs under 50MB for optimal performance
 

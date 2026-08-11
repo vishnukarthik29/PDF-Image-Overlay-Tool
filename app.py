@@ -1,12 +1,12 @@
 # app.py
 import streamlit as st
-from tabs import pdf_overlay, image_to_pdf, pdf_merger,split_pdf_tab
+from tabs import pdf_overlay, image_to_pdf, pdf_merger,split_pdf_tab,compress_pdf_tab
 
 st.set_page_config(page_title="PDF Tools", page_icon="📄", layout="wide")
 st.title("📄 PDF Tools Suite")
 
 # Create tabs for different features
-tab1, tab2, tab3, tab4 = st.tabs(["📝 PDF Image Overlay", "🖼️ Image to PDF Converter", "🔗 PDF Merger", "✂️ Split PDF"])
+tab1, tab2, tab3, tab4, tab5 = st.tabs(["📝 PDF Image Overlay", "🖼️ Image to PDF Converter", "🔗 PDF Merger", "✂️ Split PDF", "🗜️ Compress PDF"])
 
 # Load each tab from separate modules
 with tab1:
@@ -20,6 +20,9 @@ with tab3:
 
 with tab4:
     split_pdf_tab.render()
+
+with tab5:
+    compress_pdf_tab.render()
 
 # Footer
 st.markdown("---")
