@@ -304,7 +304,10 @@ def render_page_background(pdf_file, canvas_width, canvas_height):
 
         zoom = canvas_width / first_page_obj.rect.width
         mat = fitz.Matrix(zoom, zoom)
-        pix = first_page_obj.get_pixmap(matrix=mat)
+        # Force RGB with no alpha channel so frombytes' buffer size always
+        # matches what "RGB" mode expects, regardless of the page's own
+        # colorspace (CMYK, grayscale, etc.) or PyMuPDF version differences.
+        pix = first_page_obj.get_pixmap(matrix=mat, colorspace=fitz.csRGB, alpha=False)
 
         background = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
         pdf_document.close()
