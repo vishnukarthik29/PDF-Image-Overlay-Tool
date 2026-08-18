@@ -179,14 +179,13 @@ def render():
                 drawing_cache_key = "overlay_canvas_drawing"
                 drawing_cache_owner_key = "overlay_canvas_drawing_owner"
                 if st.session_state.get(drawing_cache_owner_key) != canvas_key:
-                    initial_drawing = build_stamp_drawing(img, left_px, top_px, image_width, image_height, canvas_scale)
+                    initial_drawing = build_stamp_drawing(page_background, img, left_px, top_px, image_width, image_height, canvas_scale)
                     st.session_state[drawing_cache_key] = initial_drawing
                     st.session_state[drawing_cache_owner_key] = canvas_key
                 else:
                     initial_drawing = st.session_state[drawing_cache_key]
 
                 canvas_result = st_canvas(
-                    background_image=page_background,
                     background_color="#ffffff",
                     height=canvas_height,
                     width=canvas_width,
@@ -199,8 +198,8 @@ def render():
 
                 if canvas_result.json_data is not None:
                     objects = canvas_result.json_data.get("objects", [])
-                    if objects:
-                        stamp_obj = objects[0]
+                    if len(objects) > 1:
+                        stamp_obj = objects[1]
                         new_left, new_top = stamp_obj["left"], stamp_obj["top"]
                         if (round(new_left), round(new_top)) != (round(left_px), round(top_px)):
                             st.session_state[anchor_key] = (new_left, new_top)
@@ -330,12 +329,45 @@ def render_page_background(pdf_file, canvas_width, canvas_height):
     return background
 
 
-def build_stamp_drawing(img, left_px, top_px, image_width, image_height, canvas_scale):
-    """Build the Fabric.js initial_drawing JSON for a draggable (not resizable/
-    rotatable) stamp image object, positioned at (left_px, top_px) in canvas pixels."""
+def _image_to_data_url(image):
     buffer = BytesIO()
-    img.convert("RGBA").save(buffer, format="PNG")
-    data_url = "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("utf-8")
+    image.convert("RGBA").save(buffer, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+
+def build_stamp_drawing(page_background, img, left_px, top_px, image_width, image_height, canvas_scale):
+    """Build the Fabric.js initial_drawing JSON for the canvas: the rendered PDF
+    page as a locked background object, plus a draggable (not resizable/rotatable)
+    stamp image object on top, positioned at (left_px, top_px) in canvas pixels.
+
+    The page image is baked in as a canvas object -- rather than passed through
+    st_canvas's background_image/image_to_url path -- because in some deployments
+    the component prepends the page origin to our base64 data URL (it expects a
+    relative path from Streamlit's media server, not a data URI), which corrupts
+    the URL and leaves the canvas showing solid black.
+    """
+    page_object = {
+        "type": "image",
+        "version": "4.4.0",
+        "left": 0,
+        "top": 0,
+        "width": page_background.width,
+        "height": page_background.height,
+        "scaleX": 1,
+        "scaleY": 1,
+        "src": _image_to_data_url(page_background),
+        "crossOrigin": None,
+        "hasControls": False,
+        "hasRotatingPoint": False,
+        "hasBorders": False,
+        "lockScalingX": True,
+        "lockScalingY": True,
+        "lockRotation": True,
+        "lockMovementX": True,
+        "lockMovementY": True,
+        "selectable": False,
+        "evented": False,
+    }
 
     target_width_px = image_width * canvas_scale
     target_height_px = image_height * canvas_scale
@@ -349,7 +381,7 @@ def build_stamp_drawing(img, left_px, top_px, image_width, image_height, canvas_
         "height": img.height,
         "scaleX": target_width_px / img.width,
         "scaleY": target_height_px / img.height,
-        "src": data_url,
+        "src": _image_to_data_url(img),
         "crossOrigin": None,
         "hasControls": False,
         "hasRotatingPoint": False,
@@ -361,7 +393,7 @@ def build_stamp_drawing(img, left_px, top_px, image_width, image_height, canvas_
         "evented": True,
     }
 
-    return {"version": "4.4.0", "objects": [stamp_object]}
+    return {"version": "4.4.0", "objects": [page_object, stamp_object]}
 
 
 def get_pages_to_process(page_selection, num_pages):
