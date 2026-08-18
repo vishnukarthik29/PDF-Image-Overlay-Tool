@@ -5,9 +5,22 @@ from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from io import BytesIO
 from PIL import Image, ImageDraw
-from streamlit_image_coordinates import streamlit_image_coordinates
+import base64
 import tempfile
 import os
+
+# streamlit-drawable-canvas (0.9.3, latest) calls streamlit.elements.image.image_to_url,
+# an internal helper removed in newer Streamlit versions. Shim it with a plain base64
+# data URL (which the component just assigns as an <img src>) before importing the package.
+import streamlit.elements.image as _st_image
+if not hasattr(_st_image, "image_to_url"):
+    def _image_to_url_shim(image, *_args, **_kwargs):
+        buffer = BytesIO()
+        image.convert("RGB").save(buffer, format="PNG")
+        return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("utf-8")
+    _st_image.image_to_url = _image_to_url_shim
+
+from streamlit_drawable_canvas import st_canvas
 
 def get_output_filename(original_filename):
     """Generate output filename based on original PDF name"""
@@ -102,82 +115,108 @@ def render():
                 image_width = None
                 image_height = None
 
-        # Session state anchor: bottom-left corner of the stamp, in PDF points.
-        # Reset whenever the PDF, or the stamp size, changes so the stamp starts centered.
-        anchor_key = "overlay_anchor"
+        # Session state anchor: top-left corner of the stamp, in canvas pixels
+        # (canvas origin is top-left, unlike PDF points which are bottom-left).
+        anchor_key = "overlay_anchor_px"
         size_key = "overlay_anchor_size"
+        nonce_key = "overlay_canvas_nonce"
         current_size_signature = (round(page_width), round(page_height), image_width, image_height)
+
+        canvas_width = 600
+        canvas_height = int(canvas_width * (page_height / page_width))
+        canvas_scale = canvas_width / page_width  # canvas px per PDF point
 
         if not is_background:
             if anchor_key not in st.session_state or st.session_state.get(size_key) != current_size_signature:
+                # Center the stamp by default
                 st.session_state[anchor_key] = (
-                    (page_width - image_width) / 2,
-                    (page_height - image_height) / 2,
+                    (canvas_width - image_width * canvas_scale) / 2,
+                    (canvas_height - image_height * canvas_scale) / 2,
                 )
                 st.session_state[size_key] = current_size_signature
+                st.session_state[nonce_key] = st.session_state.get(nonce_key, 0) + 1
 
-            x_pos, y_pos = st.session_state[anchor_key]
-
-            st.markdown("**🖱️ Click anywhere on the preview below to move the stamp there**")
+            st.markdown("**🖱️ Drag the stamp directly on the preview below to reposition it**")
 
             preset_cols = st.columns(6)
+            margin_px = 25
             presets = {
-                "↖ Top-Left": (50, page_height - image_height - 50),
-                "↑ Top-Center": ((page_width - image_width) / 2, page_height - image_height - 50),
-                "↗ Top-Right": (page_width - image_width - 50, page_height - image_height - 50),
-                "↙ Bottom-Left": (50, 50),
-                "↓ Bottom-Center": ((page_width - image_width) / 2, 50),
-                "↘ Bottom-Right": (page_width - image_width - 50, 50),
+                "↖ Top-Left": (margin_px, margin_px),
+                "↑ Top-Center": ((canvas_width - image_width * canvas_scale) / 2, margin_px),
+                "↗ Top-Right": (canvas_width - image_width * canvas_scale - margin_px, margin_px),
+                "↙ Bottom-Left": (margin_px, canvas_height - image_height * canvas_scale - margin_px),
+                "↓ Bottom-Center": ((canvas_width - image_width * canvas_scale) / 2, canvas_height - image_height * canvas_scale - margin_px),
+                "↘ Bottom-Right": (canvas_width - image_width * canvas_scale - margin_px, canvas_height - image_height * canvas_scale - margin_px),
             }
             for preset_col, (label, pos) in zip(preset_cols, presets.items()):
                 if preset_col.button(label, key=f"preset_{label}", use_container_width=True):
                     st.session_state[anchor_key] = pos
-                    x_pos, y_pos = pos
+                    st.session_state[nonce_key] = st.session_state.get(nonce_key, 0) + 1
+
+            left_px, top_px = st.session_state[anchor_key]
         else:
-            x_pos, y_pos = 0, 0
+            left_px, top_px = 0, 0
 
         st.markdown("---")
 
-        # PREVIEW SECTION
-        preview_canvas, preview_scale = render_preview(pdf_file, img, page_width, page_height,
-                                                        is_background, image_width, image_height,
-                                                        x_pos, y_pos)
-
-        # Display preview
+        # PREVIEW SECTION (draggable canvas)
         col_prev1, col_prev2 = st.columns([2, 1])
 
         with col_prev1:
+            page_background = render_page_background(pdf_file, canvas_width, canvas_height)
+
             if not is_background:
-                click = streamlit_image_coordinates(
-                    preview_canvas,
-                    key="overlay_preview_click",
-                    use_column_width="always",
-                    cursor="crosshair",
+                canvas_key = f"overlay_canvas_{st.session_state.get(nonce_key, 0)}"
+                # The component's frontend reloads the canvas via loadFromJSON whenever
+                # the incoming initial_drawing prop is not deep-equal to the drawing it
+                # captured on first mount (its "initialState", which never changes after
+                # that). So we must keep passing the *exact same* dict every rerun for a
+                # given canvas_key -- rebuilding it (even with identical-looking values)
+                # or passing None (which becomes a *different*, near-empty dict) makes it
+                # look like a real external change and forces a reset, which caused drags
+                # to silently snap back and then jump on the next drag. Cache the dict in
+                # session_state once per canvas_key and reuse the same object thereafter.
+                drawing_cache_key = "overlay_canvas_drawing"
+                drawing_cache_owner_key = "overlay_canvas_drawing_owner"
+                if st.session_state.get(drawing_cache_owner_key) != canvas_key:
+                    initial_drawing = build_stamp_drawing(img, left_px, top_px, image_width, image_height, canvas_scale)
+                    st.session_state[drawing_cache_key] = initial_drawing
+                    st.session_state[drawing_cache_owner_key] = canvas_key
+                else:
+                    initial_drawing = st.session_state[drawing_cache_key]
+
+                canvas_result = st_canvas(
+                    background_image=page_background,
+                    background_color="#ffffff",
+                    height=canvas_height,
+                    width=canvas_width,
+                    drawing_mode="transform",
+                    initial_drawing=initial_drawing,
+                    display_toolbar=False,
+                    update_streamlit=True,
+                    key=canvas_key,
                 )
-                if click is not None:
-                    # streamlit_image_coordinates reports coordinates in the
-                    # *rendered* (displayed) pixel space, so rescale to the
-                    # canvas's native pixel space before converting to points.
-                    rendered_width = click.get("width") or preview_canvas.width
-                    rendered_height = click.get("height") or preview_canvas.height
-                    click_scale_x = preview_canvas.width / rendered_width
-                    click_scale_y = preview_canvas.height / rendered_height
 
-                    click_x = click["x"] * click_scale_x
-                    click_y = click["y"] * click_scale_y
+                if canvas_result.json_data is not None:
+                    objects = canvas_result.json_data.get("objects", [])
+                    if objects:
+                        stamp_obj = objects[0]
+                        new_left, new_top = stamp_obj["left"], stamp_obj["top"]
+                        if (round(new_left), round(new_top)) != (round(left_px), round(top_px)):
+                            st.session_state[anchor_key] = (new_left, new_top)
+                            left_px, top_px = new_left, new_top
 
-                    # Convert clicked point (top-left origin, preview pixels)
-                    # into the bottom-left PDF-point anchor of the stamp,
-                    # centering the stamp on the click.
-                    new_x_pos = (click_x / preview_scale) - (image_width / 2)
-                    new_y_pos = page_height - (click_y / preview_scale) - (image_height / 2)
-
-                    new_pos = (new_x_pos, new_y_pos)
-                    if st.session_state.get(anchor_key) != new_pos:
-                        st.session_state[anchor_key] = new_pos
-                        st.rerun()
+                # Convert canvas pixels (top-left origin) to PDF points (bottom-left origin)
+                x_pos = left_px / canvas_scale
+                y_pos = page_height - (top_px / canvas_scale) - image_height
             else:
-                st.image(preview_canvas, caption="Position Preview (not to scale)", use_container_width=True)
+                bg_preview = Image.blend(
+                    page_background.convert("RGB"),
+                    img.resize((canvas_width, canvas_height), Image.Resampling.LANCZOS).convert("RGB"),
+                    alpha=0.3
+                )
+                st.image(bg_preview, caption="Position Preview (not to scale)", use_container_width=True)
+                x_pos, y_pos = 0, 0
 
         with col_prev2:
             st.info(f"""
@@ -253,14 +292,8 @@ def get_page_size_name(width, height):
     return f"Custom ({width:.0f}x{height:.0f}pt)"
 
 
-def render_preview(pdf_file, img, page_width, page_height, is_background,
-                   image_width, image_height, x_pos, y_pos):
-    """Render the position preview. Returns (preview_image, scale_factor),
-    where scale_factor converts PDF points -> preview pixels."""
-    preview_width = 600
-    preview_height = int(preview_width * (page_height / page_width))
-
-    # Try to render the first page of the PDF
+def render_page_background(pdf_file, canvas_width, canvas_height):
+    """Render the first page of the PDF as a PIL image sized for the canvas."""
     try:
         import fitz  # PyMuPDF
         pdf_file.seek(0)
@@ -269,58 +302,63 @@ def render_preview(pdf_file, img, page_width, page_height, is_background,
         pdf_document = fitz.open(stream=pdf_bytes, filetype="pdf")
         first_page_obj = pdf_document[0]
 
-        zoom = preview_width / first_page_obj.rect.width
+        zoom = canvas_width / first_page_obj.rect.width
         mat = fitz.Matrix(zoom, zoom)
         pix = first_page_obj.get_pixmap(matrix=mat)
 
-        preview_canvas = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-        preview_height = pix.height
+        background = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
         pdf_document.close()
 
-    except Exception as e:
-        st.warning(f"⚠️ Could not render PDF preview. Install PyMuPDF (`pip install PyMuPDF`) for better preview.")
-        preview_canvas = Image.new('RGB', (preview_width, preview_height), 'white')
-        draw = ImageDraw.Draw(preview_canvas)
-        draw.rectangle([0, 0, preview_width-1, preview_height-1], outline='gray', width=2)
+        if background.size != (canvas_width, canvas_height):
+            background = background.resize((canvas_width, canvas_height), Image.Resampling.LANCZOS)
+
+    except Exception:
+        st.warning("⚠️ Could not render PDF preview. Install PyMuPDF (`pip install PyMuPDF`) for better preview.")
+        background = Image.new('RGB', (canvas_width, canvas_height), 'white')
+        draw = ImageDraw.Draw(background)
+        draw.rectangle([0, 0, canvas_width - 1, canvas_height - 1], outline='gray', width=2)
 
         for i in range(1, 4):
-            y = preview_height * i // 4
-            draw.line([(0, y), (preview_width, y)], fill='lightgray', width=1)
-            x = preview_width * i // 4
-            draw.line([(x, 0), (x, preview_height)], fill='lightgray', width=1)
+            y = canvas_height * i // 4
+            draw.line([(0, y), (canvas_width, y)], fill='lightgray', width=1)
+            x = canvas_width * i // 4
+            draw.line([(x, 0), (x, canvas_height)], fill='lightgray', width=1)
 
-    # Calculate scaled position for preview
-    scale_factor = preview_width / page_width
+    return background
 
-    if is_background:
-        preview_x = 0
-        preview_y = 0
-        preview_img_width = preview_width
-        preview_img_height = preview_height
 
-        img_resized = img.resize((preview_img_width, preview_img_height), Image.Resampling.LANCZOS)
-        preview_canvas = Image.blend(preview_canvas, img_resized, alpha=0.3)
-    else:
-        preview_x = int(x_pos * scale_factor)
-        preview_y = int((page_height - y_pos - image_height) * scale_factor)
-        preview_img_width = int(image_width * scale_factor)
-        preview_img_height = int(image_height * scale_factor)
+def build_stamp_drawing(img, left_px, top_px, image_width, image_height, canvas_scale):
+    """Build the Fabric.js initial_drawing JSON for a draggable (not resizable/
+    rotatable) stamp image object, positioned at (left_px, top_px) in canvas pixels."""
+    buffer = BytesIO()
+    img.convert("RGBA").save(buffer, format="PNG")
+    data_url = "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("utf-8")
 
-        img_resized = img.resize((preview_img_width, preview_img_height), Image.Resampling.LANCZOS)
+    target_width_px = image_width * canvas_scale
+    target_height_px = image_height * canvas_scale
 
-        if img.mode == 'RGBA':
-            preview_canvas.paste(img_resized, (preview_x, preview_y), img_resized)
-        else:
-            preview_canvas.paste(img_resized, (preview_x, preview_y))
+    stamp_object = {
+        "type": "image",
+        "version": "4.4.0",
+        "left": left_px,
+        "top": top_px,
+        "width": img.width,
+        "height": img.height,
+        "scaleX": target_width_px / img.width,
+        "scaleY": target_height_px / img.height,
+        "src": data_url,
+        "crossOrigin": None,
+        "hasControls": False,
+        "hasRotatingPoint": False,
+        "hasBorders": True,
+        "lockScalingX": True,
+        "lockScalingY": True,
+        "lockRotation": True,
+        "selectable": True,
+        "evented": True,
+    }
 
-        draw = ImageDraw.Draw(preview_canvas)
-        draw.rectangle(
-            [preview_x, preview_y, preview_x + preview_img_width, preview_y + preview_img_height],
-            outline='red',
-            width=2
-        )
-
-    return preview_canvas, scale_factor
+    return {"version": "4.4.0", "objects": [stamp_object]}
 
 
 def get_pages_to_process(page_selection, num_pages):
