@@ -6,6 +6,24 @@ from io import BytesIO
 from PIL import Image
 import tempfile
 import os
+import warnings
+
+MAX_IMAGE_DIMENSION = 3000  # px; caps decoded-image memory for large phone-camera uploads
+
+
+def load_and_downscale_image(file_obj):
+    """Open an uploaded image and shrink it if larger than needed for a print-quality PDF page."""
+    # We downscale immediately below regardless of the file's declared size, so
+    # PIL's decompression-bomb warning (fired at open time, before that happens)
+    # would just be misleading log noise here -- suppress it for this call only.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", Image.DecompressionBombWarning)
+        img = Image.open(file_obj)
+        img.load()
+    if max(img.size) > MAX_IMAGE_DIMENSION:
+        img.thumbnail((MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION), Image.Resampling.LANCZOS)
+    return img
+
 
 def render():
     """Render the Image to PDF Converter tab"""
@@ -27,7 +45,7 @@ def render():
         cols = st.columns(min(4, len(uploaded_images)))
         for idx, img_file in enumerate(uploaded_images[:4]):
             with cols[idx % 4]:
-                img = Image.open(img_file)
+                img = load_and_downscale_image(img_file)
                 st.image(img, caption=img_file.name, use_container_width=True)
         
         if len(uploaded_images) > 4:
@@ -118,7 +136,7 @@ def create_combined_pdf(uploaded_images, page_size, fit_mode, available_width, a
     
     for img_file in uploaded_images:
         img_file.seek(0)
-        img = Image.open(img_file)
+        img = load_and_downscale_image(img_file)
         img = convert_to_rgb(img)
         
         x_pos, y_pos, new_width, new_height = calculate_image_dimensions(
@@ -147,7 +165,7 @@ def create_separate_pdfs(uploaded_images, page_size, fit_mode, available_width, 
     cols = st.columns(2)
     for idx, img_file in enumerate(uploaded_images):
         img_file.seek(0)
-        img = Image.open(img_file)
+        img = load_and_downscale_image(img_file)
         img = convert_to_rgb(img)
         
         packet = BytesIO()

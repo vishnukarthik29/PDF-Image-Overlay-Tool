@@ -8,6 +8,7 @@ from PIL import Image, ImageDraw
 import base64
 import tempfile
 import os
+import warnings
 
 # streamlit-drawable-canvas (0.9.3, latest) calls streamlit.elements.image.image_to_url,
 # an internal helper removed in newer Streamlit versions. Shim it with a plain base64
@@ -21,6 +22,31 @@ if not hasattr(_st_image, "image_to_url"):
     _st_image.image_to_url = _image_to_url_shim
 
 from streamlit_drawable_canvas import st_canvas
+
+MAX_IMAGE_DIMENSION = 2000  # px; caps decoded-image memory for small stamp/signature overlays
+MAX_BACKGROUND_IMAGE_DIMENSION = 2500  # px; higher cap for full-page letterhead backgrounds (~225 DPI on Letter/A4)
+
+
+def load_and_downscale_image(file_obj, max_dimension=MAX_IMAGE_DIMENSION):
+    """Open an uploaded image and shrink it if it's larger than needed.
+
+    Large phone-camera photos (10-50MP) decode to huge in-memory bitmaps and,
+    in this app, get re-embedded as base64 PNG inside the canvas JSON -- on
+    Streamlit Community Cloud's ~1GB free tier that combination is enough to
+    OOM-kill the app. Nothing here needs more than max_dimension px on the
+    long edge, so downscale immediately after opening.
+    """
+    # We downscale immediately below regardless of the file's declared size, so
+    # PIL's decompression-bomb warning (fired at open time, before that happens)
+    # would just be misleading log noise here -- suppress it for this call only.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", Image.DecompressionBombWarning)
+        img = Image.open(file_obj)
+        img.load()
+    if max(img.size) > max_dimension:
+        img.thumbnail((max_dimension, max_dimension), Image.Resampling.LANCZOS)
+    return img
+
 
 def get_output_filename(original_filename):
     """Generate output filename based on original PDF name"""
@@ -51,7 +77,12 @@ def render():
         
         # Display image preview
         st.subheader("Image Preview")
-        img = Image.open(image_file)
+        # layer_mode isn't chosen until the radio below renders, but on reruns
+        # (every widget interaction) its prior value is already in session_state --
+        # use that to pick the right resolution cap; defaults to stamp-size on first run.
+        preview_is_background = "Background" in st.session_state.get("layer_mode", "Overlay (on top)")
+        preview_max_dim = MAX_BACKGROUND_IMAGE_DIMENSION if preview_is_background else MAX_IMAGE_DIMENSION
+        img = load_and_downscale_image(image_file, max_dimension=preview_max_dim)
         st.image(img, width=200, caption="Your uploaded image")
         
         # Get PDF info and detect page size
@@ -429,7 +460,8 @@ def process_pdf(pdf_file, image_file, pages_to_process, num_pages,
     """Process the PDF and add image overlay"""
     # Reload image for processing
     image_file.seek(0)
-    img = Image.open(image_file)
+    max_dim = MAX_BACKGROUND_IMAGE_DIMENSION if is_background else MAX_IMAGE_DIMENSION
+    img = load_and_downscale_image(image_file, max_dimension=max_dim)
 
     # Save image temporarily
     with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as tmp_img:
