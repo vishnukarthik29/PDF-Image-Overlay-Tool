@@ -222,7 +222,6 @@ def render():
                     width=canvas_width,
                     drawing_mode="transform",
                     initial_drawing=initial_drawing,
-                    display_toolbar=False,
                     update_streamlit=True,
                     key=canvas_key,
                 )
