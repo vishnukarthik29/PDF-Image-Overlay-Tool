@@ -220,7 +220,7 @@ def render():
                     background_color="#ffffff",
                     height=canvas_height,
                     width=canvas_width,
-                    drawing_mode="transform",
+                    drawing_mode="transform",  # requires streamlit-drawable-canvas==0.9.3 pinned in requirements.txt; removed in >=0.12.0
                     initial_drawing=initial_drawing,
                     update_streamlit=True,
                     key=canvas_key,
